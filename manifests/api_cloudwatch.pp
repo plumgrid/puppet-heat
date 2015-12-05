@@ -27,7 +27,7 @@
 #   Defaults to '8003'.
 #
 # [*workers*]
-#   (Optional) The port on which the server will listen.
+#   (Optional) The number of workers to spawn.
 #   Defaults to '0'.
 #
 # [*use_ssl*]
@@ -61,15 +61,9 @@ class heat::api_cloudwatch (
 ) {
 
   include ::heat
+  include ::heat::deps
   include ::heat::params
   include ::heat::policy
-
-  Heat_config<||> ~> Service['heat-api-cloudwatch']
-  Class['heat::policy'] -> Service['heat-api-cloudwatch']
-
-  Package['heat-api-cloudwatch'] -> Heat_config<||>
-  Package['heat-api-cloudwatch'] -> Class['heat::policy']
-  Package['heat-api-cloudwatch'] -> Service['heat-api-cloudwatch']
 
   if $use_ssl {
     if !$cert_file {
@@ -83,7 +77,7 @@ class heat::api_cloudwatch (
   package { 'heat-api-cloudwatch':
     ensure => $package_ensure,
     name   => $::heat::params::api_cloudwatch_package_name,
-    tag    => 'openstack',
+    tag    => ['openstack', 'heat-package'],
   }
 
   if $manage_service {
@@ -94,16 +88,13 @@ class heat::api_cloudwatch (
     }
   }
 
-
-  Package['heat-common'] -> Service['heat-api-cloudwatch']
-
   service { 'heat-api-cloudwatch':
     ensure     => $service_ensure,
     name       => $::heat::params::api_cloudwatch_service_name,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,
-    subscribe  => $::heat::subscribe_sync_db,
+    tag        => 'heat-service',
   }
 
   heat_config {

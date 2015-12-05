@@ -10,20 +10,24 @@
 #
 # [*verbose*]
 #   (Optional) Should the daemons log verbose messages
-#   Defaults to 'false'
+#   Defaults to undef.
 #
 # [*debug*]
 #   (Optional) Should the daemons log debug messages
-#   Defaults to 'false'
+#   Defaults to undef.
 #
 # [*log_dir*]
 #   (Optional) Directory where logs should be stored
 #   If set to boolean 'false', it will not log to any directory
-#   Defaults to '/var/log/heat'
+#   Defaults to undef.
 #
 # [*rpc_backend*]
-#   (Optional) Use these options to configure the RabbitMQ message system.
-#   Defaults to 'heat.openstack.common.rpc.impl_kombu'
+#   (Optional) Use these options to configure the message system.
+#   Defaults to 'rabbit'
+#
+# [*rpc_response_timeout*]
+#   (Optional) Configure the timeout (in seconds) for rpc responses
+#   Defaults to 60 seconds
 #
 # [*rabbit_host*]
 #   (Optional) IP or hostname of the rabbit server.
@@ -49,6 +53,25 @@
 # [*rabbit_virtual_host*]
 #   (Optional) Virtual_host to use.
 #   Defaults to '/'
+#
+# [*rabbit_ha_queues*]
+#   (optional) Use HA queues in RabbitMQ (x-ha-policy: all).
+#   Defaults to undef
+#
+# [*rabbit_heartbeat_timeout_threshold*]
+#   (optional) Number of seconds after which the RabbitMQ broker is considered
+#   down if the heartbeat keepalive fails.  Any value >0 enables heartbeats.
+#   Heartbeating helps to ensure the TCP connection to RabbitMQ isn't silently
+#   closed, resulting in missed or lost messages from the queue.
+#   (Requires kombu >= 3.0.7 and amqp >= 1.4.0)
+#   Defaults to 0
+#
+# [*rabbit_heartbeat_rate*]
+#   (optional) How often during the rabbit_heartbeat_timeout_threshold period to
+#   check the heartbeat on RabbitMQ connection.  (i.e. rabbit_heartbeat_rate=2
+#   when rabbit_heartbeat_timeout_threshold=60, the heartbeat will be checked
+#   every 30 seconds.
+#   Defaults to 2
 #
 # [*rabbit_use_ssl*]
 #   (Optional) Connect over SSL for RabbitMQ.
@@ -125,20 +148,44 @@
 # [*qpid_reconnect_interval_max*]
 #
 # [*database_connection*]
-#   (Optional) Url used to connect to database.
-#   Defaults to 'sqlite:////var/lib/heat/heat.sqlite'.
+#   (optional) Connection url for the heat database.
+#   Defaults to undef.
+#
+# [*database_max_retries*]
+#   (optional) Maximum database connection retries during startup.
+#   Defaults to undef.
 #
 # [*database_idle_timeout*]
-#   (Optional) Timeout before idle db connections are reaped.
-#   Defaults to 3600.
+#   (optional) Timeout before idle database connections are reaped.
+#   Defaults to undef.
 #
+# [*database_retry_interval*]
+#   (optional) Interval between retries of opening a database connection.
+#   Defaults to undef.
+#
+# [*database_min_pool_size*]
+#   (optional) Minimum number of SQL connections to keep open in a pool.
+#   Defaults to undef.
+#
+# [*database_max_pool_size*]
+#   (optional) Maximum number of SQL connections to keep open in a pool.
+#   Defaults to undef.
+#
+# [*database_max_overflow*]
+#   (optional) If set, use this value for max_overflow with sqlalchemy.
+#   Defaults to: undef.
+
 # [*use_syslog*]
 #   (Optional) Use syslog for logging.
-#   Defaults to false.
+#   Defaults to undef.
+#
+# [*use_stderr*]
+#   (optional) Use stderr for logging
+#   Defaults to undef.
 #
 # [*log_facility*]
 #   (Optional) Syslog facility to receive log lines.
-#   Defaults to LOG_USER.
+#   Defaults to undef.
 #
 # [*flavor*]
 #   (optional) Specifies the Authentication method.
@@ -154,7 +201,9 @@
 # [*instance_user*]
 #   (Optional) The default user for new instances. Although heat claims that
 #   this feature is deprecated, it still sets the users to ec2-user if
-#   you leave this unset. This will likely be deprecated in K or L.
+#   you leave this unset. If you want heat to not set instance_user to
+#   ec2-user, you need to set this to an empty string. This feature has been
+#   deprecated for some time and will likely be removed in L or M.
 #
 # [*enable_stack_adopt*]
 #   (Optional) Enable the stack-adopt feature.
@@ -189,60 +238,73 @@
 #   Defaults to http.
 #
 class heat(
-  $auth_uri                    = false,
-  $identity_uri                = false,
-  $package_ensure              = 'present',
-  $verbose                     = false,
-  $debug                       = false,
-  $log_dir                     = '/var/log/heat',
-  $keystone_user               = 'heat',
-  $keystone_tenant             = 'services',
-  $keystone_password           = false,
-  $keystone_ec2_uri            = 'http://127.0.0.1:5000/v2.0/ec2tokens',
-  $rpc_backend                 = 'heat.openstack.common.rpc.impl_kombu',
-  $rabbit_host                 = '127.0.0.1',
-  $rabbit_port                 = 5672,
-  $rabbit_hosts                = undef,
-  $rabbit_userid               = 'guest',
-  $rabbit_password             = '',
-  $rabbit_virtual_host         = '/',
-  $rabbit_use_ssl              = false,
-  $kombu_ssl_ca_certs          = undef,
-  $kombu_ssl_certfile          = undef,
-  $kombu_ssl_keyfile           = undef,
-  $kombu_ssl_version           = 'TLSv1',
-  $amqp_durable_queues         = false,
-  $qpid_hostname               = 'localhost',
-  $qpid_port                   = 5672,
-  $qpid_username               = 'guest',
-  $qpid_password               = 'guest',
-  $qpid_heartbeat              = 60,
-  $qpid_protocol               = 'tcp',
-  $qpid_tcp_nodelay            = true,
-  $qpid_reconnect              = true,
-  $qpid_reconnect_timeout      = 0,
-  $qpid_reconnect_limit        = 0,
-  $qpid_reconnect_interval_min = 0,
-  $qpid_reconnect_interval_max = 0,
-  $qpid_reconnect_interval     = 0,
-  $database_connection         = 'sqlite:////var/lib/heat/heat.sqlite',
-  $database_idle_timeout       = 3600,
-  $use_syslog                  = false,
-  $log_facility                = 'LOG_USER',
-  $flavor                      = undef,
-  $region_name                 = undef,
-  $enable_stack_adopt          = undef,
-  $enable_stack_abandon        = undef,
-  $sync_db                     = true,
+  $auth_uri                           = false,
+  $identity_uri                       = false,
+  $package_ensure                     = 'present',
+  $verbose                            = undef,
+  $debug                              = undef,
+  $log_dir                            = undef,
+  $keystone_user                      = 'heat',
+  $keystone_tenant                    = 'services',
+  $keystone_password                  = false,
+  $keystone_ec2_uri                   = 'http://127.0.0.1:5000/v2.0/ec2tokens',
+  $rpc_backend                        = 'rabbit',
+  $rpc_response_timeout               = 60,
+  $rabbit_host                        = '127.0.0.1',
+  $rabbit_port                        = 5672,
+  $rabbit_hosts                       = undef,
+  $rabbit_userid                      = 'guest',
+  $rabbit_password                    = '',
+  $rabbit_virtual_host                = '/',
+  $rabbit_ha_queues                   = undef,
+  $rabbit_heartbeat_timeout_threshold = 0,
+  $rabbit_heartbeat_rate              = 2,
+  $rabbit_use_ssl                     = false,
+  $kombu_ssl_ca_certs                 = undef,
+  $kombu_ssl_certfile                 = undef,
+  $kombu_ssl_keyfile                  = undef,
+  $kombu_ssl_version                  = 'TLSv1',
+  $amqp_durable_queues                = false,
+  $qpid_hostname                      = 'localhost',
+  $qpid_port                          = 5672,
+  $qpid_username                      = 'guest',
+  $qpid_password                      = 'guest',
+  $qpid_heartbeat                     = 60,
+  $qpid_protocol                      = 'tcp',
+  $qpid_tcp_nodelay                   = true,
+  $qpid_reconnect                     = true,
+  $qpid_reconnect_timeout             = 0,
+  $qpid_reconnect_limit               = 0,
+  $qpid_reconnect_interval_min        = 0,
+  $qpid_reconnect_interval_max        = 0,
+  $qpid_reconnect_interval            = 0,
+  $use_syslog                         = undef,
+  $use_stderr                         = undef,
+  $log_facility                       = undef,
+  $database_connection                = undef,
+  $database_max_retries               = undef,
+  $database_idle_timeout              = undef,
+  $database_retry_interval            = undef,
+  $database_min_pool_size             = undef,
+  $database_max_pool_size             = undef,
+  $database_max_overflow              = undef,
+  $flavor                             = undef,
+  $region_name                        = undef,
+  $enable_stack_adopt                 = undef,
+  $enable_stack_abandon               = undef,
+  $sync_db                            = undef,
   # Deprecated parameters
-  $mysql_module                = undef,
-  $sql_connection              = undef,
-  $keystone_host               = '127.0.0.1',
-  $keystone_port               = '35357',
-  $keystone_protocol           = 'http',
-  $instance_user               = undef,
+  $mysql_module                       = undef,
+  $sql_connection                     = undef,
+  $keystone_host                      = '127.0.0.1',
+  $keystone_port                      = '35357',
+  $keystone_protocol                  = 'http',
+  $instance_user                      = undef,
 ) {
 
+  include ::heat::logging
+  include ::heat::db
+  include ::heat::deps
   include ::heat::params
 
   if $kombu_ssl_ca_certs and !$rabbit_use_ssl {
@@ -261,45 +323,13 @@ class heat(
     warning('The mysql_module parameter is deprecated. The latest 2.x mysql module will be used.')
   }
 
-  File {
-    require => Package['heat-common'],
-  }
-
-  group { 'heat':
-    name    => 'heat',
-    require => Package['heat-common'],
-  }
-
-  user { 'heat':
-    name    => 'heat',
-    gid     => 'heat',
-    groups  => ['heat'],
-    system  => true,
-    require => Package['heat-common'],
-  }
-
-  file { '/etc/heat/':
-    ensure => directory,
-    owner  => 'heat',
-    group  => 'heat',
-    mode   => '0750',
-  }
-
-  file { '/etc/heat/heat.conf':
-    owner => 'heat',
-    group => 'heat',
-    mode  => '0640',
-  }
-
   package { 'heat-common':
     ensure => $package_ensure,
     name   => $::heat::params::common_package_name,
-    tag    => 'openstack',
+    tag    => ['openstack', 'heat-package'],
   }
 
-  Package['heat-common'] -> Heat_config<||>
-
-  if $rpc_backend == 'heat.openstack.common.rpc.impl_kombu' {
+  if $rpc_backend == 'rabbit' {
 
     if $rabbit_hosts {
       heat_config { 'oslo_messaging_rabbit/rabbit_host': ensure => absent }
@@ -315,18 +345,24 @@ class heat(
       }
     }
 
-    if size($rabbit_hosts) > 1 {
-      heat_config { 'oslo_messaging_rabbit/rabbit_ha_queues': value => true }
+    if $rabbit_ha_queues == undef {
+      if size($rabbit_hosts) > 1 {
+        heat_config { 'oslo_messaging_rabbit/rabbit_ha_queues': value => true }
+      } else {
+        heat_config { 'oslo_messaging_rabbit/rabbit_ha_queues': value => false }
+      }
     } else {
-      heat_config { 'oslo_messaging_rabbit/rabbit_ha_queues': value => false }
+      heat_config { 'oslo_messaging_rabbit/rabbit_ha_queues': value => $rabbit_ha_queues }
     }
 
     heat_config {
-      'oslo_messaging_rabbit/rabbit_userid'          : value => $rabbit_userid;
-      'oslo_messaging_rabbit/rabbit_password'        : value => $rabbit_password, secret => true;
-      'oslo_messaging_rabbit/rabbit_virtual_host'    : value => $rabbit_virtual_host;
-      'oslo_messaging_rabbit/rabbit_use_ssl'         : value => $rabbit_use_ssl;
-      'DEFAULT/amqp_durable_queues'    : value => $amqp_durable_queues;
+      'oslo_messaging_rabbit/rabbit_userid':                value => $rabbit_userid;
+      'oslo_messaging_rabbit/rabbit_password':              value => $rabbit_password, secret => true;
+      'oslo_messaging_rabbit/rabbit_virtual_host':          value => $rabbit_virtual_host;
+      'oslo_messaging_rabbit/heartbeat_timeout_threshold':  value => $rabbit_heartbeat_timeout_threshold;
+      'oslo_messaging_rabbit/heartbeat_rate':               value => $rabbit_heartbeat_rate;
+      'oslo_messaging_rabbit/rabbit_use_ssl':               value => $rabbit_use_ssl;
+      'oslo_messaging_rabbit/amqp_durable_queues':          value => $amqp_durable_queues;
     }
 
     if $rabbit_use_ssl {
@@ -366,23 +402,23 @@ class heat(
 
   }
 
-  if $rpc_backend == 'heat.openstack.common.rpc.impl_qpid' {
+  if $rpc_backend == 'qpid' {
 
     heat_config {
-      'DEFAULT/qpid_hostname'               : value => $qpid_hostname;
-      'DEFAULT/qpid_port'                   : value => $qpid_port;
-      'DEFAULT/qpid_username'               : value => $qpid_username;
-      'DEFAULT/qpid_password'               : value => $qpid_password, secret => true;
-      'DEFAULT/qpid_heartbeat'              : value => $qpid_heartbeat;
-      'DEFAULT/qpid_protocol'               : value => $qpid_protocol;
-      'DEFAULT/qpid_tcp_nodelay'            : value => $qpid_tcp_nodelay;
-      'DEFAULT/qpid_reconnect'              : value => $qpid_reconnect;
-      'DEFAULT/qpid_reconnect_timeout'      : value => $qpid_reconnect_timeout;
-      'DEFAULT/qpid_reconnect_limit'        : value => $qpid_reconnect_limit;
-      'DEFAULT/qpid_reconnect_interval_min' : value => $qpid_reconnect_interval_min;
-      'DEFAULT/qpid_reconnect_interval_max' : value => $qpid_reconnect_interval_max;
-      'DEFAULT/qpid_reconnect_interval'     : value => $qpid_reconnect_interval;
-      'DEFAULT/amqp_durable_queues'         : value => $amqp_durable_queues;
+      'oslo_messaging_qpid/qpid_hostname'               : value => $qpid_hostname;
+      'oslo_messaging_qpid/qpid_port'                   : value => $qpid_port;
+      'oslo_messaging_qpid/qpid_username'               : value => $qpid_username;
+      'oslo_messaging_qpid/qpid_password'               : value => $qpid_password, secret => true;
+      'oslo_messaging_qpid/qpid_heartbeat'              : value => $qpid_heartbeat;
+      'oslo_messaging_qpid/qpid_protocol'               : value => $qpid_protocol;
+      'oslo_messaging_qpid/qpid_tcp_nodelay'            : value => $qpid_tcp_nodelay;
+      'oslo_messaging_qpid/qpid_reconnect'              : value => $qpid_reconnect;
+      'oslo_messaging_qpid/qpid_reconnect_timeout'      : value => $qpid_reconnect_timeout;
+      'oslo_messaging_qpid/qpid_reconnect_limit'        : value => $qpid_reconnect_limit;
+      'oslo_messaging_qpid/qpid_reconnect_interval_min' : value => $qpid_reconnect_interval_min;
+      'oslo_messaging_qpid/qpid_reconnect_interval_max' : value => $qpid_reconnect_interval_max;
+      'oslo_messaging_qpid/qpid_reconnect_interval'     : value => $qpid_reconnect_interval;
+      'oslo_messaging_qpid/amqp_durable_queues'         : value => $amqp_durable_queues;
     }
 
   }
@@ -445,97 +481,13 @@ class heat(
     }
   }
 
-
   heat_config {
     'DEFAULT/rpc_backend'                  : value => $rpc_backend;
-    'DEFAULT/debug'                        : value => $debug;
-    'DEFAULT/verbose'                      : value => $verbose;
+    'DEFAULT/rpc_response_timeout'         : value => $rpc_response_timeout;
     'ec2authtoken/auth_uri'                : value => $keystone_ec2_uri;
     'keystone_authtoken/admin_tenant_name' : value => $keystone_tenant;
     'keystone_authtoken/admin_user'        : value => $keystone_user;
     'keystone_authtoken/admin_password'    : value => $keystone_password, secret => true;
-  }
-
-  # Log configuration
-  if $log_dir {
-    heat_config {
-      'DEFAULT/log_dir' : value  => $log_dir;
-    }
-  } else {
-    heat_config {
-      'DEFAULT/log_dir' : ensure => absent;
-    }
-  }
-
-  if $sql_connection {
-    warning('The sql_connection parameter is deprecated, use database_connection instead.')
-    $database_connection_real = $sql_connection
-  } else {
-    $database_connection_real = $database_connection
-  }
-
-  if $database_connection_real {
-    validate_re($database_connection_real,
-      '(sqlite|mysql|postgresql):\/\/(\S+:\S+@\S+\/\S+)?')
-
-    case $database_connection_real {
-      /^mysql:\/\//: {
-        $backend_package = false
-        require mysql::bindings
-        require mysql::bindings::python
-      }
-      /^postgresql:\/\//: {
-        $backend_package = 'python-psycopg2'
-      }
-      /^sqlite:\/\//: {
-        $backend_package = 'python-pysqlite2'
-      }
-      default: {
-        fail('Unsupported backend configured')
-      }
-    }
-
-    if $backend_package and !defined(Package[$backend_package]) {
-      package {'heat-backend-package':
-        ensure => present,
-        name   => $backend_package,
-        tag    => 'openstack',
-      }
-    }
-
-    heat_config {
-      'database/connection':
-        value  => $database_connection_real,
-        secret => true;
-      'database/idle_timeout':
-        value => $database_idle_timeout;
-    }
-
-    if $sync_db {
-      $subscribe_sync_db = Exec['heat-dbsync']
-      Heat_config['database/connection'] ~> Exec['heat-dbsync']
-
-      exec { 'heat-dbsync':
-        command     => $::heat::params::dbsync_command,
-        path        => '/usr/bin',
-        user        => 'heat',
-        refreshonly => true,
-        logoutput   => on_failure,
-        subscribe   => Package['heat-common'],
-      }
-    }
-  }
-
-  # Syslog configuration
-  if $use_syslog {
-    heat_config {
-      'DEFAULT/use_syslog':           value => true;
-      'DEFAULT/syslog_log_facility':  value => $log_facility;
-    }
-  } else {
-    heat_config {
-      'DEFAULT/use_syslog':           value => false;
-    }
   }
 
   if $flavor {
@@ -552,7 +504,10 @@ class heat(
   }
 
   # instance_user
-  if $instance_user {
+  # special case for empty string since it's a valid value
+  if $instance_user == '' {
+    heat_config { 'DEFAULT/instance_user': value => ''; }
+  } elsif $instance_user {
     heat_config { 'DEFAULT/instance_user': value => $instance_user; }
   } else {
     heat_config { 'DEFAULT/instance_user': ensure => absent; }

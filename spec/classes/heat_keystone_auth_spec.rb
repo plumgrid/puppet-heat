@@ -30,10 +30,12 @@ describe 'heat::keystone::auth' do
           :service_type              => 'orchestration',
           :region                    => 'RegionOne',
           :tenant                    => 'services',
+          :configure_user_role       => true,
           :public_url                => 'http://127.0.0.1:8004/v1/%(tenant_id)s',
           :admin_url                 => 'http://127.0.0.1:8004/v1/%(tenant_id)s',
           :internal_url              => 'http://127.0.0.1:8004/v1/%(tenant_id)s',
           :configure_delegated_roles => false,
+          :heat_stack_user_role      => 'HeatUser::foobaz@::foobaz',
         })
       end
 
@@ -42,7 +44,6 @@ describe 'heat::keystone::auth' do
           :ensure   => 'present',
           :password => params[:password],
           :email    => params[:email],
-          :tenant   => params[:tenant]
         )
       end
 
@@ -54,11 +55,10 @@ describe 'heat::keystone::auth' do
       end
 
       it 'configures heat stack_user role' do
-        is_expected.to contain_keystone_role("heat_stack_user").with(
+        is_expected.to contain_keystone_role("HeatUser::foobaz@::foobaz").with(
           :ensure  => 'present'
         )
       end
-
 
       it 'configures heat service' do
         is_expected.to contain_keystone_service( params[:auth_name] ).with(
@@ -154,18 +154,6 @@ describe 'heat::keystone::auth' do
     end
 
     context 'when configuring delegated roles' do
-      let :pre_condition do
-        "class { 'heat::engine':
-           auth_encryption_key       => '1234567890AZERTYUIOPMLKJHGFDSQ12',
-           configure_delegated_roles => false,
-         }
-        "
-      end
-
-      let :facts do
-        { :osfamily => 'Debian' }
-      end
-
       before do
         params.merge!({
           :configure_delegated_roles => true,
@@ -178,33 +166,26 @@ describe 'heat::keystone::auth' do
       end
     end
 
-    describe 'with deprecated and new params both set' do
-      let :pre_condition do
-        "class { 'heat::engine':
-           auth_encryption_key => '1234567890AZERTYUIOPMLKJHGFDSQ12',
-         }
-        "
+    context 'when not managing heat_stack_user_role' do
+      before do
+        params.merge!({
+          :heat_stack_user_role        => 'HeatUser::foobaz@::foobaz',
+          :manage_heat_stack_user_role => false
+        })
       end
 
-      let :facts do
-        { :osfamily => 'Debian' }
+      it 'doesnt manage the heat_stack_user_role' do
+        is_expected.to_not contain_keystone_user_role(params[:heat_stack_user_role])
       end
-
-      let :params do
-        {
-          :configure_delegated_roles => true,
-          :password                  => 'something',
-        }
-      end
-      it_raises 'a Puppet::Error', /both heat::engine and heat::keystone::auth are both trying to configure delegated roles/
-
     end
 
   end
 
   context 'on Debian platforms' do
     let :facts do
-      { :osfamily => 'Debian' }
+      @default_facts.merge({
+        :osfamily => 'Debian',
+      })
     end
 
     it_configures 'heat keystone auth'
@@ -212,7 +193,9 @@ describe 'heat::keystone::auth' do
 
   context 'on RedHat platforms' do
     let :facts do
-      { :osfamily => 'RedHat' }
+      @default_facts.merge({
+        :osfamily => 'RedHat',
+      })
     end
 
     it_configures 'heat keystone auth'

@@ -12,7 +12,6 @@ describe 'heat::engine' do
       :engine_life_check_timeout     => '2',
       :trusts_delegated_roles        => ['heat_stack_owner'],
       :deferred_auth_method          => 'trusts',
-      :configure_delegated_roles     => true,
       :default_software_config_transport   => 'POLL_SERVER_CFN',
       :default_deployment_signal_transport => 'CFN_SIGNAL',
     }
@@ -31,7 +30,6 @@ describe 'heat::engine' do
         :engine_life_check_timeout     => '2',
         :trusts_delegated_roles        => ['role1', 'role2'],
         :deferred_auth_method          => 'trusts',
-        :configure_delegated_roles     => true,
         :default_software_config_transport   => 'POLL_SERVER_CFN',
         :default_deployment_signal_transport => 'CFN_SIGNAL',
       }
@@ -49,8 +47,7 @@ describe 'heat::engine' do
       it { is_expected.to contain_package('heat-engine').with(
         :ensure => 'present',
         :name   => os_params[:package_name],
-        :tag    => 'openstack',
-        :notify => 'Exec[heat-dbsync]'
+        :tag    => ['openstack', 'heat-package'],
       ) }
 
       it { is_expected.to contain_service('heat-engine').with(
@@ -59,10 +56,7 @@ describe 'heat::engine' do
         :enable     => expected_params[:enabled],
         :hasstatus  => 'true',
         :hasrestart => 'true',
-        :require    => [ 'File[/etc/heat/heat.conf]',
-                         'Package[heat-common]',
-                         'Package[heat-engine]'],
-        :subscribe  => 'Exec[heat-dbsync]'
+        :tag        => 'heat-service',
       ) }
 
       it { is_expected.to contain_heat_config('DEFAULT/auth_encryption_key').with_value( expected_params[:auth_encryption_key] ) }
@@ -75,15 +69,6 @@ describe 'heat::engine' do
       it { is_expected.to contain_heat_config('DEFAULT/deferred_auth_method').with_value( expected_params[:deferred_auth_method] ) }
       it { is_expected.to contain_heat_config('DEFAULT/default_software_config_transport').with_value( expected_params[:default_software_config_transport] ) }
       it { is_expected.to contain_heat_config('DEFAULT/default_deployment_signal_transport').with_value( expected_params[:default_deployment_signal_transport] ) }
-
-      it 'configures delegated roles' do
-        is_expected.to contain_keystone_role("role1").with(
-          :ensure  => 'present'
-        )
-        is_expected.to contain_keystone_role("role2").with(
-          :ensure  => 'present'
-        )
-      end
     end
 
     context 'with disabled service managing' do
@@ -99,26 +84,8 @@ describe 'heat::engine' do
         :enable     => false,
         :hasstatus  => 'true',
         :hasrestart => 'true',
-        :require    => [ 'File[/etc/heat/heat.conf]',
-                         'Package[heat-common]',
-                         'Package[heat-engine]'],
-        :subscribe  => 'Exec[heat-dbsync]'
+        :tag        => 'heat-service',
       ) }
-    end
-    context 'with $sync_db set to false in ::heat' do
-      let :pre_condition do
-        "class {'heat': sync_db => false}"
-      end
-
-      it 'configures heat-engine service to not subscribe to the dbsync resource' do
-        is_expected.to contain_service('heat-engine').that_subscribes_to(nil)
-      end
-
-     it 'configures the heat-engine package to not be notified by the dbsync resource ' do
-        is_expected.to contain_package('heat-engine').with(
-          :notify => nil,
-       )
-     end
     end
     context 'with wrong auth_encryption_key parameter size' do
       before do
@@ -131,7 +98,9 @@ describe 'heat::engine' do
 
   context 'on Debian platforms' do
     let :facts do
-      { :osfamily => 'Debian' }
+      @default_facts.merge({
+        :osfamily => 'Debian',
+      })
     end
 
     let :os_params do
@@ -145,7 +114,9 @@ describe 'heat::engine' do
 
   context 'on RedHat platforms' do
     let :facts do
-      { :osfamily => 'RedHat' }
+      @default_facts.merge({
+        :osfamily => 'RedHat',
+      })
     end
 
     let :os_params do

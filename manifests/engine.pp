@@ -20,7 +20,11 @@
 #   Defaults to true.
 #
 # [*heat_stack_user_role*]
-#   (optional) Keystone role for heat template-defined users
+#   (optional) Keystone role for heat template-defined users.
+#   This setting does not actually create the role. If you change
+#   this to a different value you should also set
+#   heat::keystone::auth::heat_stack_user_role if you want the
+#   correct role created.
 #   Defaults to 'heat_stack_user'
 #
 # [*heat_metadata_server_url*]
@@ -73,13 +77,6 @@
 #   configure the keystone roles.
 #   Defaults to ['heat_stack_owner']
 #
-# === Deprecated Parameters
-#
-# [*configure_delegated_roles*]
-#   (optional) Whether to configure the delegated roles.
-#   Defaults to true
-#   Deprecated: Moved to heat::keystone::auth, will be removed in a future release.
-#
 class heat::engine (
   $auth_encryption_key,
   $package_ensure                      = 'present',
@@ -93,9 +90,10 @@ class heat::engine (
   $deferred_auth_method                = 'trusts',
   $default_software_config_transport   = 'POLL_SERVER_CFN',
   $default_deployment_signal_transport = 'CFN_SIGNAL',
-  $trusts_delegated_roles              = ['heat_stack_owner'],  #DEPRECATED
-  $configure_delegated_roles           = true,                  #DEPRECATED
+  $trusts_delegated_roles              = ['heat_stack_owner'],
 ) {
+
+  include ::heat::deps
 
   # Validate Heat Engine AES key
   # must be either 16, 24, or 32 bytes long
@@ -109,15 +107,10 @@ class heat::engine (
   include ::heat
   include ::heat::params
 
-  Heat_config<||> ~> Service['heat-engine']
-
-  Package['heat-engine'] -> Heat_config<||>
-  Package['heat-engine'] -> Service['heat-engine']
   package { 'heat-engine':
     ensure => $package_ensure,
     name   => $::heat::params::engine_package_name,
-    tag    => 'openstack',
-    notify => $::heat::subscribe_sync_db,
+    tag    => ['openstack', 'heat-package'],
   }
 
   if $manage_service {
@@ -128,23 +121,13 @@ class heat::engine (
     }
   }
 
-  if $configure_delegated_roles {
-    warning ('configure_delegated_roles is deprecated in this class, use heat::keystone::auth')
-    keystone_role { $trusts_delegated_roles:
-      ensure => present,
-    }
-  }
-
   service { 'heat-engine':
     ensure     => $service_ensure,
     name       => $::heat::params::engine_service_name,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,
-    require    => [ File['/etc/heat/heat.conf'],
-                    Package['heat-common'],
-                    Package['heat-engine']],
-    subscribe  => $::heat::subscribe_sync_db,
+    tag        => 'heat-service',
   }
 
   heat_config {

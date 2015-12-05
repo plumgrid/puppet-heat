@@ -74,9 +74,10 @@ describe 'heat::api_cfn' do
             :name       => platform_params[:api_service_name],
             :enable     => params[:enabled],
             :hasstatus  => true,
-            :hasrestart => true
+            :hasrestart => true,
+            :tag        => 'heat-service',
           )
-          is_expected.to contain_service('heat-api-cfn').that_subscribes_to('Exec[heat-dbsync]')
+          is_expected.to contain_service('heat-api-cfn').that_subscribes_to(nil)
         end
       end
     end
@@ -95,9 +96,10 @@ describe 'heat::api_cfn' do
           :name       => platform_params[:api_service_name],
           :enable     => false,
           :hasstatus  => true,
-          :hasrestart => true
+          :hasrestart => true,
+          :tag        => 'heat-service',
         )
-        is_expected.to contain_service('heat-api-cfn').that_subscribes_to('Exec[heat-dbsync]')
+        is_expected.to contain_service('heat-api-cfn').that_subscribes_to(nil)
       end
     end
 
@@ -116,7 +118,9 @@ describe 'heat::api_cfn' do
 
   context 'on Debian platforms' do
     let :facts do
-      { :osfamily => 'Debian' }
+      @default_facts.merge({
+        :osfamily => 'Debian',
+      })
     end
 
     let :platform_params do
@@ -128,7 +132,9 @@ describe 'heat::api_cfn' do
 
   context 'on RedHat platforms' do
     let :facts do
-      { :osfamily => 'RedHat' }
+      @default_facts.merge({
+        :osfamily => 'RedHat',
+      })
     end
 
     let :platform_params do
